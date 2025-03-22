@@ -9,6 +9,7 @@ class FileCombinerApp:
         self.root = root
         self.root.title("File Combiner")
         self.root.geometry("800x700")  # Increased height from 600 to 700
+        self.root.minsize(600, 650)    # Set minimum window size
         
         # Variables
         self.root_directory = ""
@@ -183,6 +184,30 @@ class FileCombinerApp:
             total_files = len(self.selected_files)
             
             with open(self.output_file, 'w', encoding='utf-8') as outfile:
+                # Add file header with metadata
+                import datetime
+                current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                outfile.write("=" * 80 + "\n")
+                outfile.write("COMBINED FILE INDEX\n")
+                outfile.write("=" * 80 + "\n")
+                outfile.write(f"Created: {current_date}\n")
+                outfile.write(f"Root Directory: {self.root_directory}\n")
+                outfile.write(f"Number of Files: {total_files}\n\n")
+                
+                # Add table of contents with all files
+                outfile.write("TABLE OF CONTENTS\n")
+                outfile.write("-" * 80 + "\n")
+                for i, file_path in enumerate(self.selected_files):
+                    rel_path = os.path.relpath(file_path, self.root_directory)
+                    outfile.write(f"{i+1}. {rel_path}\n")
+                
+                # Add separator between header and content
+                outfile.write("\n" + "=" * 80 + "\n")
+                outfile.write("FILE CONTENTS\n")
+                outfile.write("=" * 80 + "\n\n")
+                
+                # Process each file
                 for i, file_path in enumerate(self.selected_files):
                     # Update progress bar
                     progress_value = int((i / total_files) * 100)
