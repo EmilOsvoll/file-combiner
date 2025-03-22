@@ -8,8 +8,8 @@ class FileCombinerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("File Combiner")
-        self.root.geometry("800x700")  # Increased height from 600 to 700
-        self.root.minsize(600, 650)    # Set minimum window size
+        self.root.geometry("1000x700")  # Wider for dual-panel layout
+        self.root.minsize(800, 650)    # Set minimum window size
         
         # Variables
         self.root_directory = ""
@@ -32,29 +32,85 @@ class FileCombinerApp:
         ttk.Entry(root_frame, textvariable=self.root_dir_var, width=70).pack(side=tk.LEFT, padx=5)
         ttk.Button(root_frame, text="Browse", command=self.select_root_directory).pack(side=tk.LEFT, padx=5)
         
-        # File selection
+        # File selection with dual panel layout
         file_frame = ttk.LabelFrame(self.main_frame, text="Step 2: Select Files to Combine", padding="10")
         file_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        btn_frame = ttk.Frame(file_frame)
-        btn_frame.pack(fill=tk.X)
+        # Create a paned window for the split view
+        paned = ttk.PanedWindow(file_frame, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        ttk.Button(btn_frame, text="Add Files", command=self.add_files).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Remove Selected", command=self.remove_selected).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Clear All", command=self.clear_files).pack(side=tk.LEFT, padx=5)
+        # Left panel - File browser tree
+        left_panel = ttk.Frame(paned)
+        paned.add(left_panel, weight=1)
         
-        # File listbox with scrollbar
-        list_frame = ttk.Frame(file_frame)
-        list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        # Buttons for tree view
+        tree_btn_frame = ttk.Frame(left_panel)
+        tree_btn_frame.pack(fill=tk.X)
         
-        scrollbar = ttk.Scrollbar(list_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        ttk.Button(tree_btn_frame, text="Refresh", command=self.refresh_tree).pack(side=tk.LEFT, padx=5)
+        ttk.Button(tree_btn_frame, text="Expand All", command=lambda: self.expand_all_items(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(tree_btn_frame, text="Collapse All", command=lambda: self.expand_all_items(False)).pack(side=tk.LEFT, padx=5)
         
-        self.file_listbox = tk.Listbox(list_frame, selectmode=tk.EXTENDED, height=15)
-        self.file_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        # Tree view with scrollbars
+        tree_container = ttk.Frame(left_panel)
+        tree_container.pack(fill=tk.BOTH, expand=True)
         
-        self.file_listbox.config(yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.file_listbox.yview)
+        # Add vertical scrollbar
+        vsb_tree = ttk.Scrollbar(tree_container, orient="vertical")
+        vsb_tree.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Add horizontal scrollbar
+        hsb_tree = ttk.Scrollbar(tree_container, orient="horizontal")
+        hsb_tree.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Create the tree view
+        self.tree = ttk.Treeview(tree_container)
+        self.tree.heading('#0', text='Files and Folders', anchor=tk.W)
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Connect scrollbars to treeview
+        self.tree.configure(yscrollcommand=vsb_tree.set, xscrollcommand=hsb_tree.set)
+        vsb_tree.configure(command=self.tree.yview)
+        hsb_tree.configure(command=self.tree.xview)
+        
+        # Bind events for tree
+        self.tree.bind("<Double-1>", self.toggle_item)
+        
+        # Center panel - Transfer buttons
+        center_panel = ttk.Frame(paned, width=50)  # Fixed width for button panel
+        paned.add(center_panel, weight=0)
+        
+        # Add padding around buttons
+        button_frame = ttk.Frame(center_panel, padding="10")
+        button_frame.pack(expand=True)
+        
+        # Add buttons for transferring items
+        ttk.Button(button_frame, text=">", command=self.add_selected, width=3).pack(pady=10)
+        ttk.Button(button_frame, text="<", command=self.remove_selected, width=3).pack(pady=10)
+        
+        # Right panel - Selected files list
+        right_panel = ttk.Frame(paned)
+        paned.add(right_panel, weight=1)
+        
+        # Button for clearing selection
+        ttk.Button(right_panel, text="Clear All", command=self.clear_selection).pack(anchor=tk.W, padx=5, pady=5)
+        
+        # Listbox with scrollbar for selected files
+        list_container = ttk.Frame(right_panel)
+        list_container.pack(fill=tk.BOTH, expand=True)
+        
+        vsb_list = ttk.Scrollbar(list_container, orient="vertical")
+        vsb_list.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.selected_listbox = tk.Listbox(list_container, selectmode=tk.EXTENDED)
+        self.selected_listbox.pack(fill=tk.BOTH, expand=True)
+        self.selected_listbox.configure(yscrollcommand=vsb_list.set)
+        vsb_list.configure(command=self.selected_listbox.yview)
+        
+        # Set initial pane sizes (use the correct method names)
+        # ttk.PanedWindow doesn't support paneconfig, so we'll set the weights when adding them
+        # No need to call any additional methods here
         
         # Output file selection
         output_frame = ttk.LabelFrame(self.main_frame, text="Step 3: Specify Output File", padding="10")
@@ -71,23 +127,18 @@ class FileCombinerApp:
         self.progress = ttk.Progressbar(combine_frame, orient=tk.HORIZONTAL, length=300, mode='determinate')
         self.progress.pack(pady=10)
         
-        # Create the combine button with explicit text and standard button instead of ttk
         self.combine_button = tk.Button(combine_frame, text="Combine Files", 
-                                       command=self.combine_files,
-                                       font=('Arial', 10),
-                                       bg='#e1e1e1',
-                                       height=1,
-                                       width=15)
+                                      command=self.combine_files,
+                                      font=('Arial', 10),
+                                      bg='#e1e1e1',
+                                      height=1,
+                                      width=15)
         self.combine_button.pack(pady=5)
         
         # Status label
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
         ttk.Label(self.main_frame, textvariable=self.status_var, font=('Arial', 10)).pack(anchor=tk.W, pady=5)
-        
-        # Create custom style for the main button
-        style = ttk.Style()
-        style.configure('Accent.TButton', font=('Arial', 11, 'bold'))
     
     def select_root_directory(self):
         directory = filedialog.askdirectory(title="Select Root Directory")
@@ -95,58 +146,193 @@ class FileCombinerApp:
             self.root_directory = directory
             self.root_dir_var.set(directory)
             self.status_var.set(f"Root directory set to: {directory}")
+            
+            # Clear previous list and refresh tree
+            self.selected_files = []
+            self.selected_listbox.delete(0, tk.END)
+            self.refresh_tree()
     
-    def add_files(self):
+    def refresh_tree(self):
         if not self.root_directory:
             messagebox.showwarning("Warning", "Please select a root directory first.")
             return
             
-        files = filedialog.askopenfilenames(title="Select Files to Combine", 
-                                          initialdir=self.root_directory)
-        if files:
-            for file in files:
-                try:
-                    # Improved check for files within root directory or any of its subdirectories
-                    # This uses os.path.abspath to handle path differences more reliably
-                    file_abs = os.path.abspath(file)
-                    root_abs = os.path.abspath(self.root_directory)
-                    
-                    # Check if file path starts with root path (including subfolders)
-                    if file_abs.startswith(root_abs):
-                        # Get path relative to root directory
-                        rel_path = os.path.relpath(file, self.root_directory)
-                        item_text = f"{rel_path}"
-                        
-                        # Check if file is already in the list
-                        if item_text not in [self.file_listbox.get(i) for i in range(self.file_listbox.size())]:
-                            self.selected_files.append(file)
-                            self.file_listbox.insert(tk.END, item_text)
-                    else:
-                        messagebox.showwarning("Warning", 
-                                             f"File '{os.path.basename(file)}' is not within the root directory.")
-                except ValueError:
-                    # This handles the case where commonpath might fail
-                    messagebox.showwarning("Warning", 
-                                         f"File '{os.path.basename(file)}' cannot be compared with the root directory.")
+        # Clear existing tree
+        for item in self.tree.get_children():
+            self.tree.delete(item)
             
-            self.status_var.set(f"{len(self.selected_files)} files selected")
+        # Root node
+        root_node = self.tree.insert('', 'end', text=os.path.basename(self.root_directory), 
+                               open=True, values=[self.root_directory, "directory"])
+        
+        # Populate the tree
+        self.populate_tree(root_node, self.root_directory)
+        
+        # Expand the root node
+        self.tree.item(root_node, open=True)
+        
+    def populate_tree(self, parent, path, depth=1):
+        try:
+            # Skip certain directories to avoid clutter
+            skip_dirs = ['.git', '__pycache__', 'node_modules', '.vscode', '.idea']
+            
+            # List all items in the directory
+            items = sorted(os.listdir(path))
+            
+            # First add directories
+            for item in items:
+                item_path = os.path.join(path, item)
+                
+                # If it's a directory
+                if os.path.isdir(item_path) and item not in skip_dirs:
+                    # Insert the directory into the tree
+                    node = self.tree.insert(parent, 'end', text=item, 
+                                     values=[item_path, "directory"])
+                    
+                    # Only recurse if the depth is not too great (to avoid slowdown)
+                    if depth < 8:  # Limit recursion depth
+                        self.populate_tree(node, item_path, depth + 1)
+                    elif len(os.listdir(item_path)) > 0:
+                        # Add a placeholder if there are items but depth limit is reached
+                        self.tree.insert(node, 'end', text="...", values=["", "placeholder"])
+            
+            # Then add files
+            for item in items:
+                item_path = os.path.join(path, item)
+                
+                # If it's a file
+                if os.path.isfile(item_path):
+                    # Insert the file into the tree
+                    self.tree.insert(parent, 'end', text=item, 
+                                     values=[item_path, "file"])
+                    
+        except PermissionError:
+            # Add an error node if permission is denied
+            self.tree.insert(parent, 'end', text="Permission denied", values=["", "error"])
+        except Exception as e:
+            # Add an error node for any other exception
+            self.tree.insert(parent, 'end', text=f"Error: {str(e)}", values=["", "error"])
+    
+    def toggle_item(self, event):
+        """Toggle expand/collapse on double-click"""
+        item = self.tree.identify('item', event.x, event.y)
+        if item:
+            # Get type of item
+            values = self.tree.item(item, "values")
+            if len(values) >= 2:
+                item_type = values[1]
+                
+                # Only toggle directories
+                if item_type == "directory":
+                    if self.tree.item(item, "open"):
+                        self.tree.item(item, open=False)
+                    else:
+                        self.tree.item(item, open=True)
+                        
+                        # If this item has a placeholder, remove it and add actual items
+                        children = self.tree.get_children(item)
+                        if len(children) == 1 and self.tree.item(children[0], "values")[1] == "placeholder":
+                            self.tree.delete(children[0])
+                            item_path = self.tree.item(item, "values")[0]
+                            self.populate_tree(item, item_path)
+    
+    def add_selected(self):
+        """Add selected tree items to the right panel"""
+        selected_items = self.tree.selection()
+        
+        if not selected_items:
+            messagebox.showinfo("Information", "Please select files or folders in the left panel first.")
+            return
+            
+        # Process all selected items
+        for item in selected_items:
+            item_values = self.tree.item(item, "values")
+            item_path = item_values[0]
+            item_type = item_values[1]
+            
+            if item_type == "directory":
+                # If it's a directory, add all files in it recursively
+                self.add_directory_files(item_path)
+            elif item_type == "file":
+                # If it's a file, add it if not already in the list
+                if item_path not in self.selected_files:
+                    self.selected_files.append(item_path)
+                    rel_path = os.path.relpath(item_path, self.root_directory)
+                    self.selected_listbox.insert(tk.END, rel_path)
+        
+        # Update status
+        self.status_var.set(f"{len(self.selected_files)} files selected")
+    
+    def add_directory_files(self, directory):
+        """Add all files in a directory and its subdirectories"""
+        try:
+            for root, dirs, files in os.walk(directory):
+                # Skip certain directories to avoid clutter
+                dirs[:] = [d for d in dirs if d not in ['.git', '__pycache__', 'node_modules', '.vscode', '.idea']]
+                
+                # Add each file
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if file_path not in self.selected_files:
+                        self.selected_files.append(file_path)
+                        rel_path = os.path.relpath(file_path, self.root_directory)
+                        self.selected_listbox.insert(tk.END, rel_path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error adding directory files: {str(e)}")
     
     def remove_selected(self):
-        selected_indices = self.file_listbox.curselection()
+        """Remove selected items from the right panel"""
+        selected_indices = self.selected_listbox.curselection()
+        
         if not selected_indices:
+            messagebox.showinfo("Information", "Please select files to remove in the right panel first.")
             return
             
         # Remove items in reverse order to avoid index shifting
         for i in sorted(selected_indices, reverse=True):
-            self.file_listbox.delete(i)
-            self.selected_files.pop(i)
+            rel_path = self.selected_listbox.get(i)
+            full_path = os.path.join(self.root_directory, rel_path)
             
+            # Remove from selected files list
+            if full_path in self.selected_files:
+                self.selected_files.remove(full_path)
+            
+            # Remove from listbox
+            self.selected_listbox.delete(i)
+        
+        # Update status
         self.status_var.set(f"{len(self.selected_files)} files selected")
     
-    def clear_files(self):
-        self.file_listbox.delete(0, tk.END)
+    def clear_selection(self):
+        """Clear all selected files"""
         self.selected_files = []
-        self.status_var.set("File list cleared")
+        self.selected_listbox.delete(0, tk.END)
+        self.status_var.set("Selection cleared")
+    
+    def expand_all_items(self, expand=True):
+        """Expand or collapse all items in the tree"""
+        def _expand_all(node):
+            for child in self.tree.get_children(node):
+                # Check if this is a directory
+                item_values = self.tree.item(child, "values")
+                if len(item_values) >= 2 and item_values[1] == "directory":
+                    self.tree.item(child, open=expand)
+                    
+                    # If expanding and this item has a placeholder, replace it
+                    if expand:
+                        children = self.tree.get_children(child)
+                        if len(children) == 1 and self.tree.item(children[0], "values")[1] == "placeholder":
+                            self.tree.delete(children[0])
+                            item_path = self.tree.item(child, "values")[0]
+                            self.populate_tree(child, item_path)
+                    
+                    # Recurse
+                    _expand_all(child)
+        
+        # Start recursion from the root
+        for child in self.tree.get_children():
+            self.tree.item(child, open=expand)
+            _expand_all(child)
     
     def select_output_file(self):
         output_file = filedialog.asksaveasfilename(
