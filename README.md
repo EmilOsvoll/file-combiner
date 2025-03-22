@@ -2,6 +2,8 @@
 
 A simple, user-friendly GUI application that allows you to combine multiple text files into a single file with proper formatting and organization.
 
+![Demo](demo.png)
+
 ## Features
 
 - **Simple 4-Step Process**: Easy-to-follow workflow for combining files
