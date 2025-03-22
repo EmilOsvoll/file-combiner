@@ -178,6 +178,54 @@ class FileCombinerApp:
         combine_thread.daemon = True
         combine_thread.start()
     
+    def _generate_tree_view(self, directory, prefix="", is_last=True, exclude_dirs=None):
+        """Generate a tree view of the directory structure."""
+        if exclude_dirs is None:
+            exclude_dirs = ['.git', '__pycache__', 'node_modules', '.vscode', '.idea']
+            
+        lines = []
+        
+        # Get relative directory name for the current level
+        rel_dir = os.path.relpath(directory, self.root_directory)
+        if rel_dir == '.':
+            dir_name = os.path.basename(self.root_directory)
+        else:
+            dir_name = os.path.basename(directory)
+            
+        # Add this directory to the tree
+        if is_last:
+            lines.append(f"{prefix}└── {dir_name}/")
+            next_prefix = prefix + "    "
+        else:
+            lines.append(f"{prefix}├── {dir_name}/")
+            next_prefix = prefix + "│   "
+            
+        # Get all items in the directory
+        try:
+            items = sorted(os.listdir(directory))
+            # First process directories, then files
+            dirs = [item for item in items if os.path.isdir(os.path.join(directory, item)) and item not in exclude_dirs]
+            files = [item for item in items if os.path.isfile(os.path.join(directory, item))]
+            
+            # Process directories
+            for i, item in enumerate(dirs):
+                item_path = os.path.join(directory, item)
+                is_last_dir = (i == len(dirs) - 1 and len(files) == 0)
+                lines.extend(self._generate_tree_view(item_path, next_prefix, is_last_dir, exclude_dirs))
+                
+            # Process files
+            for i, item in enumerate(files):
+                if i == len(files) - 1:  # Last item
+                    lines.append(f"{next_prefix}└── {item}")
+                else:
+                    lines.append(f"{next_prefix}├── {item}")
+        except PermissionError:
+            lines.append(f"{next_prefix}[Permission denied]")
+        except Exception as e:
+            lines.append(f"{next_prefix}[Error: {str(e)}]")
+            
+        return lines
+        
     def _combine_files_task(self):
         try:
             self.status_var.set("Combining files...")
@@ -195,7 +243,17 @@ class FileCombinerApp:
                 outfile.write(f"Root Directory: {self.root_directory}\n")
                 outfile.write(f"Number of Files: {total_files}\n\n")
                 
-                # Add table of contents with all files
+                # Add tree view of the directory structure
+                outfile.write("DIRECTORY STRUCTURE\n")
+                outfile.write("-" * 80 + "\n")
+                
+                # Generate the tree view starting from the root directory
+                tree_lines = self._generate_tree_view(self.root_directory)
+                for line in tree_lines[1:]:  # Skip the first line (root dir with prefix)
+                    outfile.write(line + "\n")
+                outfile.write("\n")
+                
+                # Add table of contents with all selected files
                 outfile.write("TABLE OF CONTENTS\n")
                 outfile.write("-" * 80 + "\n")
                 for i, file_path in enumerate(self.selected_files):
